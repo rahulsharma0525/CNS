@@ -1,5 +1,7 @@
 package com.osmbonuspackdemo;
 
+import java.util.Locale;
+
 import org.osmdroid.bonuspack.routing.Road;
 import org.osmdroid.bonuspack.routing.RoadNode;
 import android.app.Activity;
@@ -8,6 +10,7 @@ import android.content.Intent;
 import android.content.res.TypedArray;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -82,11 +85,16 @@ class RoadNodesAdapter extends BaseAdapter implements OnClickListener {
 
     @Override public View getView(int position, View convertView, ViewGroup viewGroup) {
         RoadNode entry = (RoadNode)getItem(position);
+        if(!MapActivity.locationQueue.contains(entry.mLocation)){
+        MapActivity.locationQueue.add(entry.mLocation);
+        MapActivity.instrQueue.add(entry.mInstructions);
+        }
         if (convertView == null) {
             LayoutInflater inflater = (LayoutInflater) mContext
                     .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             convertView = inflater.inflate(R.layout.item_layout, null);
         }
+        
         TextView tvTitle = (TextView)convertView.findViewById(R.id.title);
         String instructions = (entry.mInstructions==null ? "" : entry.mInstructions);
         tvTitle.setText("" + (position+1) + ". " + instructions);
@@ -96,6 +104,13 @@ class RoadNodesAdapter extends BaseAdapter implements OnClickListener {
    		Drawable icon = mContext.getResources().getDrawable(iconId);
 		ImageView ivManeuver = (ImageView)convertView.findViewById(R.id.thumbnail);
    		ivManeuver.setImageDrawable(icon);
+   		
+//   		TextToSpeech tts = new TextToSpeech(new MapActivity(),new MapActivity());
+//		tts.setLanguage(Locale.US);
+//		tts.speak(entry.mInstructions, TextToSpeech.QUEUE_FLUSH, null);
+//		tts.stop();
+//        tts.shutdown();
+   		
         return convertView;
     }
 

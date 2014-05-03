@@ -3,8 +3,11 @@ package com.osmbonuspackdemo;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Queue;
 import java.util.Stack;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,6 +50,12 @@ import org.osmdroid.util.NetworkLocationIgnorer;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.DirectedLocationOverlay;
 import org.osmdroid.views.overlay.Overlay;
+
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GooglePlayServicesClient;
+import com.google.android.gms.location.LocationClient;
+import com.google.android.gms.location.LocationRequest;
+
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
@@ -69,6 +78,8 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.TextToSpeech.OnInitListener;
 import android.text.InputType;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
@@ -90,9 +101,14 @@ import android.widget.Toast;
  * @author M.Kergall
  *
  */
-public class MapActivity extends Activity implements MapEventsReceiver, LocationListener, SensorEventListener {
+public class MapActivity extends Activity implements MapEventsReceiver, LocationListener, SensorEventListener, com.google.android.gms.location.LocationListener,GooglePlayServicesClient.ConnectionCallbacks,GooglePlayServicesClient.OnConnectionFailedListener {
 	protected MapView map;
-	
+	LocationClient locationclient;
+	TextToSpeech tts;
+	public String instr=new String();
+	public static Queue locationQueue = new LinkedList();
+	public static Queue instrQueue = new LinkedList();
+	public int navFlag=0;
 	protected GeoPoint startPoint, destinationPoint;
 	protected ArrayList<GeoPoint> viaPoints;
 	protected static int START_INDEX=-2, DEST_INDEX=-1;
@@ -157,12 +173,13 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 		map.setTileSource(TileSourceFactory.MAPNIK);
 
 		map.setBuiltInZoomControls(true);
+	//	map.setMaxZoomLevel(10);
 		map.setMultiTouchControls(true);
 		IMapController mapController = map.getController();
 		
 		//To use MapEventsReceiver methods, we add a MapEventsOverlay:
-///*can comment*/		MapEventsOverlay overlay = new MapEventsOverlay(this, this);//Rahul
-///*can comment*/		map.getOverlays().add(overlay);//Rahul
+/*can comment*/		MapEventsOverlay overlay = new MapEventsOverlay(this, this);//Rahul
+/*can comment*/		map.getOverlays().add(overlay);//Rahul
 		
 		locationManager = (LocationManager)getSystemService(LOCATION_SERVICE);
 		
@@ -170,7 +187,8 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 		//mOrientation = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
 
 		//map prefs:
-		mapController.setZoom(prefs.getInt("MAP_ZOOM_LEVEL", 5));
+		//mapController.setZoom(prefs.getInt("MAP_ZOOM_LEVEL", 5));
+		mapController.setZoom(30);
 		mapController.setCenter(new GeoPoint((double)prefs.getFloat("MAP_CENTER_LAT", 48.5f), 
 				(double)prefs.getFloat("MAP_CENTER_LON", 2.5f)));
 		
@@ -222,8 +240,8 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 //		} else 
 //			mTrackingMode = false;
 		
-		AutoCompleteOnPreferences departureText = (AutoCompleteOnPreferences) findViewById(R.id.editDeparture);
-		departureText.setPrefKeys(SHARED_PREFS_APPKEY, PREF_LOCATIONS_KEY);
+//		AutoCompleteOnPreferences departureText = (AutoCompleteOnPreferences) findViewById(R.id.editDeparture);
+//		departureText.setPrefKeys(SHARED_PREFS_APPKEY, PREF_LOCATIONS_KEY);
 		
 		Button searchDepButton = (Button)findViewById(R.id.buttonSearchDep);
 		searchDepButton.setOnClickListener(new View.OnClickListener() {
@@ -232,8 +250,8 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 			}
 		});
 		
-		AutoCompleteOnPreferences destinationText = (AutoCompleteOnPreferences) findViewById(R.id.editDestination);
-		destinationText.setPrefKeys(SHARED_PREFS_APPKEY, PREF_LOCATIONS_KEY);
+//		AutoCompleteOnPreferences destinationText = (AutoCompleteOnPreferences) findViewById(R.id.editDestination);
+//		destinationText.setPrefKeys(SHARED_PREFS_APPKEY, PREF_LOCATIONS_KEY);
 		
 		Button searchDestButton = (Button)findViewById(R.id.buttonSearchDest);
 		searchDestButton.setOnClickListener(new View.OnClickListener() {
@@ -252,9 +270,9 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 //					searchPanel.setVisibility(View.VISIBLE);//Rahul
 //				}//Rahul
 //			}//Rahul
-//		});//Rahul
-//		View searchPanel = (View)findViewById(R.id.search_panel);
-//		searchPanel.setVisibility(prefs.getInt("PANEL_VISIBILITY", View.VISIBLE));
+////		});//Rahul
+		//View searchPanel = (View)findViewById(R.id.search_panel);
+		//searchPanel.setVisibility(prefs.getInt("PANEL_VISIBILITY", View.VISIBLE));
 
 		registerForContextMenu(searchDestButton);//Rahul
 		//context menu for clicking on the map is registered on this button. //Rahul
@@ -266,10 +284,10 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
     	roadNodeMarkers = new FolderOverlay(this);
 		map.getOverlays().add(roadNodeMarkers);
 		
-		if (savedInstanceState != null){
-			//STATIC mRoad = savedInstanceState.getParcelable("road");
-			updateUIWithRoad(mRoad);
-		}
+//		if (savedInstanceState != null){
+//			//STATIC mRoad = savedInstanceState.getParcelable("road");
+//			updateUIWithRoad(mRoad);
+//		}
 		
 		//POIs:
 		//POI search interface:
@@ -322,6 +340,7 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 //				openFile(uri, true);
 //			}
 //		}
+
 	}
 
 	void setViewOn(BoundingBoxE6 bb){
@@ -674,7 +693,8 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
     		String instructions = (node.mInstructions==null ? "" : node.mInstructions);
     		Marker nodeMarker = new Marker(map);
     		nodeMarker.setTitle("Step " + (i+1));
-    		nodeMarker.setSnippet(instructions);
+    		//nodeMarker.setSnippet(instructions);
+    		nodeMarker.setSnippet("Rahul");
     		nodeMarker.setSubDescription(Road.getLengthDurationText(node.mLength, node.mDuration));
     		nodeMarker.setPosition(node.mLocation);
     		nodeMarker.setIcon(icon);
@@ -1134,15 +1154,15 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 				R.string.destination, R.drawable.marker_destination, -1);
 			getRoadAsync();
 			return true;
-		case R.id.menu_viapoint:
-			GeoPoint viaPoint = new GeoPoint(mClickedGeoPoint);
-			addViaPoint(viaPoint);
-			getRoadAsync();
-			return true;
-		case R.id.menu_kmlpoint:
-			GeoPoint kmlPoint = new GeoPoint(mClickedGeoPoint);
-			addKmlPoint(kmlPoint);
-			return true;
+//		case R.id.menu_viapoint:
+//			GeoPoint viaPoint = new GeoPoint(mClickedGeoPoint);
+//			addViaPoint(viaPoint);
+//			getRoadAsync();
+//			return true;
+//		case R.id.menu_kmlpoint:
+//			GeoPoint kmlPoint = new GeoPoint(mClickedGeoPoint);
+//			addKmlPoint(kmlPoint);
+//			return true;
 		default:
 			return super.onContextItemSelected(item);
 		}
@@ -1202,11 +1222,9 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 			myIntent.putExtra("NODE_ID", -1 /*TODO - default to roadNodeMarkers.getBubbledItemId()*/);
 			startActivityForResult(myIntent, ROUTE_REQUEST);
 			return true;
-//		case R.id.menu_pois://Rahul
-//			myIntent = new Intent(this, POIActivity.class);//Rahul
-//			myIntent.putExtra("ID", -1 /*TODO - default to poiMarkers.getBubbledItemId()*/);//Rahul
-//			startActivityForResult(myIntent, POIS_REQUEST);//Rahul
-//			return true;
+		case R.id.navigation://Rahul
+			startNavigation();
+			return true;
 //		case R.id.menu_kml_url:
 //			openUrlDialog();
 //			return true;
@@ -1274,6 +1292,26 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 		}
 	}
 	
+	private void startNavigation() {
+		navFlag=1;  
+		 locationclient = new LocationClient(this,this,this);
+		locationclient.connect();
+		
+//	instr=instrQueue.poll().toString();
+//				
+//		 tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+//			    @Override
+//			    public void onInit(int status){
+//			        if(status == TextToSpeech.SUCCESS) {
+//
+//			       
+//			    	//	Toast.makeText(getApplicationContext(), instr, Toast.LENGTH_SHORT).show();
+//			          tts.speak(instr, TextToSpeech.QUEUE_FLUSH, null);
+//			         }
+//			    }
+//			});
+	}
+
 	//------------ LocationListener implementation
 	private final NetworkLocationIgnorer mIgnorer = new NetworkLocationIgnorer();
 	long mLastTime = 0; // milliseconds
@@ -1294,6 +1332,7 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 			//we get the location for the first time:
 			myLocationOverlay.setEnabled(true);
 			map.getController().animateTo(newLocation);
+			
 		}
 		
 		GeoPoint prevLocation = myLocationOverlay.getLocation();
@@ -1326,6 +1365,39 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 		} else {
 			//just redraw the location overlay:
 			map.invalidate();
+		}
+		
+		if(navFlag==1){
+			
+			if(!(locationQueue.isEmpty())){
+				GeoPoint loc=(GeoPoint) locationQueue.peek();
+				if((Math.abs(loc.getLatitudeE6()-newLocation.getLatitudeE6())) <=400 && Math.abs(loc.getLongitudeE6()-newLocation.getLongitudeE6())<=400){
+					locationQueue.remove();
+				 instr=instrQueue.poll().toString();
+			//	 Toast.makeText(getApplicationContext(), instr, Toast.LENGTH_SHORT).show();
+				tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+				    @Override
+				    public void onInit(int status){
+				        if(status == TextToSpeech.SUCCESS) {
+				    		
+				          tts.speak(instr, TextToSpeech.QUEUE_FLUSH, null);
+				         }
+				    }
+				});
+				}
+			}
+		   //  Toast.makeText(getApplicationContext(), loc.getLatitudeE6(), Toast.LENGTH_SHORT).show();
+
+//			if((loc.getLatitudeE6()-newLocation.getLatitudeE6()) <=4 && (loc.getLongitudeE6()-newLocation.getLongitudeE6()<=0)){
+//				locationQueue.remove();
+//				String instr=(String) instrQueue.remove();
+////				TextToSpeech tts = new TextToSpeech(this, this);
+////				tts.setLanguage(Locale.US);
+////				tts.speak(instr, TextToSpeech.QUEUE_FLUSH, null);
+////				tts.stop();
+////		        tts.shutdown();
+//			}
+			
 		}
 	}
 
@@ -1364,4 +1436,37 @@ public class MapActivity extends Activity implements MapEventsReceiver, Location
 				break;
 		}
 	}
+
+	@Override
+	public void onConnectionFailed(ConnectionResult arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onConnected(Bundle arg0) {
+		  LocationRequest locationrequest;
+		  locationrequest = LocationRequest.create();
+
+		     locationrequest.setInterval(1000);
+		   //  Toast.makeText(getApplicationContext(), "Rahul", Toast.LENGTH_SHORT).show();
+		     locationclient.requestLocationUpdates(locationrequest, this);		
+	}
+
+	@Override
+	public void onDisconnected() {
+		// TODO Auto-generated method stub
+		
+	}
+
+//	@Override
+//	public void onInit(int initStatus) {
+//		 if (initStatus == TextToSpeech.SUCCESS) {
+//	            if (tts.isLanguageAvailable(Locale.US) == TextToSpeech.LANG_AVAILABLE)
+//	                tts.setLanguage(Locale.US);
+//	        } else if (initStatus == TextToSpeech.ERROR) {
+//	            Toast.makeText(this, "Sorry! Text To Speech failed...",
+//	                    Toast.LENGTH_LONG).show();
+//	        }		
+//	}
 }
